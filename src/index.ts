@@ -14,4 +14,15 @@ new ControllersLoader({
   controllers: [NsfwController]
 }).load(app);
 
-app.listen(3000);
+app.listen(3001);
+
+// Fallback
+app.all('*', (_, res) => res.redirect('https://chromegle.net/'));
+
+// CORS
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Authorization, Content-Length, X-Requested-With');
+  res.send(200);
+});

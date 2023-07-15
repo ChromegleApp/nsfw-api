@@ -2,8 +2,28 @@ import {Controller, Post} from 'simple-ts-express-decorators';
 import multer, {memoryStorage} from 'multer';
 import {Request, Response} from 'express';
 import {NsfwImageClassifier} from 'app/NsfwImageClassifier';
+import rateLimit from 'express-rate-limit';
 
 const upload = multer({storage: memoryStorage()});
+
+/**
+ * Prevent user spam
+ */
+const userRateLimitMinute = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: (request) => `${request.headers['x-forwarded-for'] || request.ip}`
+});
+
+/**
+ * Prevent global spam
+ */
+const globalRateLimitMinute = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: () => '1'
+});
+
 
 @Controller()
 export class NsfwController {
@@ -13,8 +33,15 @@ export class NsfwController {
     this.classifier = new NsfwImageClassifier();
   }
 
-  @Post('/classify', upload.single('image'))
+  @Post('/classify', upload.single('image'), userRateLimitMinute, globalRateLimitMinute)
   async classify(request: Request, response: Response) {
+
+    if (request.headers['origin-authority'] !== 'Chromegle') {
+      return response
+        .status(400)
+        .json({error: 'No permission'});
+    }
+
     if (!request.file) {
       return response
         .status(410)
@@ -26,17 +53,4 @@ export class NsfwController {
     return response.json(data);
   }
 
-  @Post('/classify-many', upload.array('images', 10))
-  async classifyMany(request: Request, response: Response) {
-    if (!request.files || !request.files.length) {
-      return response
-        .status(410)
-        .json({error: 'Specify images'});
-    }
-
-    const buffers = (request.files as Express.Multer.File[]).map(file => file.buffer);
-    const data = await this.classifier.classifyMany(buffers);
-
-    return response.json(data);
-  }
 }
